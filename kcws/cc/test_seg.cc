@@ -105,6 +105,19 @@ int main(int argc, char *argv[]) {
       std::vector<std::vector<kcws::SegTok>> results;
       std::vector<UnicodeStr>  todoSentences(sentences.begin() + (BATCH_SIZE * i), sentences.begin() + end);
       CHECK(sm.Segment(todoSentences, &results)) << "segment error";
+      CHECK(todoSentences.size() == results.size());
+      auto st_size = results.size();
+      for (size_t i = 0; i < st_size; ++i) {
+        const UnicodeStr &sentence = todoSentences[i];
+        auto toks = results[i];
+        for (auto tok : toks) {
+          const UnicodeCharT* src = &sentence[0];
+          std::string word;
+          BasicStringUtil::u16tou8(src + tok.first, tok.second, word);
+          std::cout << word << " ";
+        }
+        std::cout << std::endl;
+      }
     }
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>
                     (std::chrono::steady_clock::now() - start);
