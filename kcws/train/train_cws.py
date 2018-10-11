@@ -13,6 +13,8 @@ import tensorflow as tf
 import os
 from idcnn import Model as IdCNN
 from bilstm import Model as BiLSTM
+import time
+
 FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_string('train_data_path', "newcorpus/2014_train.txt",
@@ -33,6 +35,7 @@ tf.app.flags.DEFINE_integer("train_steps", 150000, "trainning steps")
 tf.app.flags.DEFINE_float("learning_rate", 0.001, "learning rate")
 tf.app.flags.DEFINE_bool("use_idcnn", True, "whether use the idcnn")
 tf.app.flags.DEFINE_integer("track_history", 6, "track max history accuracy")
+tf.app.flags.DEFINE_bool("use_pipeline", False, "use tensorflow pipeline(tf.data)")
 
 
 def do_load_data(path):
@@ -106,10 +109,11 @@ class Model:
 
     def loss(self, X, Y):
         P, sequence_length = self.inference(X)
+        iters = tf.shape(X)[0] * tf.shape(X)[1]
         log_likelihood, self.transition_params = tf.contrib.crf.crf_log_likelihood(
             P, Y, sequence_length)
         loss = tf.reduce_mean(-log_likelihood)
-        return loss
+        return loss, iters
 
     def load_w2v(self, path, expectDim):
         fp = open(path, "r")
@@ -211,6 +215,22 @@ def inputs(path):
     return features, label
 
 
+def input_pipeline(path, batch_size):
+    def parse_record_fn(line):
+        cols_types = [[0]] * FLAGS.max_sentence_len * 2
+        columns = tf.decode_csv(line, record_defaults=cols_types, field_delim=' ')
+        return tf.transpose(columns[:FLAGS.max_sentence_len]), tf.transpose(columns[FLAGS.max_sentence_len:])
+
+    iterator = tf.data.TextLineDataset(path) \
+                      .repeat(None) \
+                      .batch(batch_size) \
+                      .map(parse_record_fn) \
+                      .shuffle(batch_size) \
+                      .prefetch(batch_size) \
+                      .make_one_shot_iterator()
+    return iterator.get_next()
+
+
 def train(total_loss):
     return tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(total_loss)
 
@@ -225,38 +245,45 @@ def main(unused_argv):
         model = Model(FLAGS.embedding_size, FLAGS.num_tags,
                       FLAGS.word2vec_path, FLAGS.num_hidden)
         print("train data path:", trainDataPath)
-        X, Y = inputs(trainDataPath)
+        if FLAGS.use_pipeline:
+            print("use tensorflow pipeline")
+            X, Y = input_pipeline(trainDataPath, FLAGS.batch_size)
+        else:
+            X, Y = inputs(trainDataPath)
         tX, tY = do_load_data(tf.app.flags.FLAGS.test_data_path)
-        total_loss = model.loss(X, Y)
+        total_loss, iters_op = model.loss(X, Y)
         train_op = train(total_loss)
         test_unary_score, test_sequence_length = model.test_unary_score()
         sv = tf.train.Supervisor(graph=graph, logdir=FLAGS.log_dir)
-        with sv.managed_session(master='') as sess:
+        tf_config = tf.ConfigProto()
+        tf_config.gpu_options.allow_growth = True
+        with sv.managed_session(master='', config=tf_config) as sess:
             # actual training loop
             training_steps = FLAGS.train_steps
             trackHist = 0
             bestAcc = 0
             tf.train.write_graph(sess.graph.as_graph_def(),
                                  FLAGS.log_dir, "graph.pb", as_text=False)
+            iters = 0
+            start_time = time.time()
             for step in range(training_steps):
                 if sv.should_stop():
                     break
                 try:
-                    _, trainsMatrix = sess.run(
-                        [train_op, model.transition_params])
+                    _, wds, trainsMatrix = sess.run([train_op, iters_op, model.transition_params])
                     # for debugging and learning purposes, see how the loss
                     # gets decremented thru training steps
+                    iters += wds
                     if (step + 1) % 100 == 0:
-                        print("[%d] loss: [%r]" %
-                              (step + 1, sess.run(total_loss)))
+                        speed = iters / (time.time() - start_time)
+                        print("[%d] loss: [%r] speed: [%f]" % (step + 1, sess.run(total_loss), speed))
                     if (step + 1) % 1000 == 0 or step == 0:
                         acc = test_evaluate(sess, test_unary_score,
                                             test_sequence_length, trainsMatrix,
                                             model.inp, tX, tY)
                         if acc > bestAcc:
                             if step:
-                                sv.saver.save(
-                                    sess, FLAGS.log_dir + '/best_model')
+                                sv.saver.save(sess, FLAGS.log_dir + '/best_model')
                             bestAcc = acc
                             trackHist = 0
                         elif trackHist > FLAGS.track_history:
