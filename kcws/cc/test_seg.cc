@@ -23,14 +23,17 @@
 #include "sentence_breaker.h"  // NOLINT
 #include "tensorflow/core/platform/init_main.h"
 
+const int BATCH_SIZE = 2000;
+
 DEFINE_string(test_sentence, "", "the test string");
 DEFINE_string(test_file, "", "the test file");
 DEFINE_string(model_path, "", "the model path");
 DEFINE_string(vocab_path, "", "vocab path");
 DEFINE_string(user_dict_path, "", "user dict path");
 DEFINE_int32(max_setence_len, 80, "max sentence len");
+DEFINE_int32(batch_size, BATCH_SIZE, "batch size");
 
-const int BATCH_SIZE = 2000;
+
 int load_test_file(const std::string& path,
                    std::vector<std::string>* pstrs) {
   FILE *fp = fopen(path.c_str(), "r");
@@ -54,6 +57,7 @@ int load_test_file(const std::string& path,
   fclose(fp);
   return tn;
 }
+
 int main(int argc, char *argv[]) {
   tensorflow::port::InitMain(argv[0], &argc, &argv);
   google::ParseCommandLineFlags(&argc, &argv, true);
@@ -93,17 +97,18 @@ int main(int argc, char *argv[]) {
 
     VLOG(0) << "loaded :" << FLAGS_test_file << " ,got " << ns << " lines,"
             << sentences.size() << " sentences, " << utodo.size() << " characters";
-    int batch = (sentences.size() - 1) / BATCH_SIZE + 1;
+    int batch_size = FLAGS_batch_size;
+    int batch = (sentences.size() - 1) / batch_size + 1;
 
     auto start = std::chrono::steady_clock::now();
     for (int i = 0; i < batch; i++) {
       // VLOG(0) << "seg batch:" << i;
-      int end = BATCH_SIZE * (i + 1);
+      int end = batch_size * (i + 1);
       if (end > static_cast<int>(sentences.size())) {
         end = sentences.size();
       }
       std::vector<std::vector<kcws::SegTok>> results;
-      std::vector<UnicodeStr>  todoSentences(sentences.begin() + (BATCH_SIZE * i), sentences.begin() + end);
+      std::vector<UnicodeStr>  todoSentences(sentences.begin() + (batch_size * i), sentences.begin() + end);
       CHECK(sm.Segment(todoSentences, &results)) << "segment error";
       CHECK(todoSentences.size() == results.size());
       auto st_size = results.size();

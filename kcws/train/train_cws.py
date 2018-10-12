@@ -36,6 +36,7 @@ tf.app.flags.DEFINE_float("learning_rate", 0.001, "learning rate")
 tf.app.flags.DEFINE_bool("use_idcnn", True, "whether use the idcnn")
 tf.app.flags.DEFINE_integer("track_history", 6, "track max history accuracy")
 tf.app.flags.DEFINE_bool("use_pipeline", False, "use tensorflow pipeline(tf.data)")
+tf.app.flags.DEFINE_string('dilations', '1,1,2', 'dilations')
 
 
 def do_load_data(path):
@@ -66,17 +67,7 @@ class Model:
         self.numHidden = numHidden
         self.c2v = self.load_w2v(c2vPath, FLAGS.embedding_size)
         self.words = tf.Variable(self.c2v, name="words")
-        layers = [
-            {
-                'dilation': 1
-            },
-            {
-                'dilation': 1
-            },
-            {
-                'dilation': 2
-            },
-        ]
+        layers = [ {'dilation': int(i)} for i in FLAGS.dilations.split(',') ]
         if FLAGS.use_idcnn:
             self.model = IdCNN(layers, 3, FLAGS.num_hidden, FLAGS.embedding_size,
                                FLAGS.max_sentence_len, FLAGS.num_tags)
