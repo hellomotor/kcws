@@ -30,13 +30,13 @@ tf.app.flags.DEFINE_integer("max_sentence_len", 80,
 tf.app.flags.DEFINE_integer("embedding_size", 50, "embedding size")
 tf.app.flags.DEFINE_integer("num_tags", 4, "BMES")
 tf.app.flags.DEFINE_integer("num_hidden", 100, "hidden unit number")
+tf.app.flags.DEFINE_integer("num_layers", 1, "number of hidden layers")
 tf.app.flags.DEFINE_integer("batch_size", 100, "num example per mini batch")
 tf.app.flags.DEFINE_integer("train_steps", 150000, "trainning steps")
 tf.app.flags.DEFINE_float("learning_rate", 0.001, "learning rate")
 tf.app.flags.DEFINE_bool("use_idcnn", True, "whether use the idcnn")
 tf.app.flags.DEFINE_integer("track_history", 6, "track max history accuracy")
 tf.app.flags.DEFINE_bool("use_pipeline", False, "use tensorflow pipeline(tf.data)")
-tf.app.flags.DEFINE_string('dilations', '1,1,2', 'dilations')
 
 
 def do_load_data(path):
@@ -67,13 +67,23 @@ class Model:
         self.numHidden = numHidden
         self.c2v = self.load_w2v(c2vPath, FLAGS.embedding_size)
         self.words = tf.Variable(self.c2v, name="words")
-        layers = [ {'dilation': int(i)} for i in FLAGS.dilations.split(',') ]
+        layers = [
+            { 
+                'dilation': 1 
+            },
+            { 
+                'dilation': 1 
+            },
+            { 
+                'dilation': 2 
+            }
+        ]
         if FLAGS.use_idcnn:
             self.model = IdCNN(layers, 3, FLAGS.num_hidden, FLAGS.embedding_size,
                                FLAGS.max_sentence_len, FLAGS.num_tags)
         else:
             self.model = BiLSTM(
-                FLAGS.num_hidden, FLAGS.max_sentence_len, FLAGS.num_tags)
+                FLAGS.num_layers, FLAGS.num_hidden, FLAGS.max_sentence_len, FLAGS.num_tags)
         self.trains_params = None
         self.inp = tf.placeholder(tf.int32,
                                   shape=[None, FLAGS.max_sentence_len],

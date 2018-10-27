@@ -14,9 +14,11 @@ import tensorflow as tf
 
 class Model:
     def __init__(self,
+                 numLayers,
                  numHidden,
                  maxSeqLen,
                  numTags):
+        self.num_layers = numLayers
         self.num_hidden = numHidden
         self.num_tags = numTags
         self.max_seq_len = maxSeqLen
@@ -29,29 +31,16 @@ class Model:
 
     def inference(self, X, length, reuse=False):
         length_64 = tf.cast(length, tf.int64)
-        with tf.variable_scope("bilstm", reuse=reuse):
-            forward_output, _ = tf.nn.dynamic_rnn(
-                tf.contrib.rnn.LSTMCell(self.num_hidden,
-                                        reuse=reuse),
-                X,
-                dtype=tf.float32,
-                sequence_length=length,
-                scope="RNN_forward")
-            backward_output_, _ = tf.nn.dynamic_rnn(
-                tf.contrib.rnn.LSTMCell(self.num_hidden,
-                                        reuse=reuse),
-                inputs=tf.reverse_sequence(X,
-                                           length_64,
-                                           seq_dim=1),
-                dtype=tf.float32,
-                sequence_length=length,
-                scope="RNN_backword")
-
-        backward_output = tf.reverse_sequence(backward_output_,
-                                              length_64,
-                                              seq_dim=1)
-
-        output = tf.concat([forward_output, backward_output], 2)
+        output = X
+        for i in range(self.num_layers):
+            with tf.variable_scope("bilstm_" + str(i), reuse=reuse):
+                outputs, _ = tf.nn.bidirectional_dynamic_rnn(
+                    tf.contrib.rnn.LSTMCell(self.num_hidden, reuse=reuse),
+                    tf.contrib.rnn.LSTMCell(self.num_hidden, reuse=reuse),
+                    output,
+                    dtype=tf.float32,
+                    sequence_length=length)
+                output = tf.concat(outputs, 2)
         output = tf.reshape(output, [-1, self.num_hidden * 2])
         if reuse is None or not reuse:
             output = tf.nn.dropout(output, 0.5)
