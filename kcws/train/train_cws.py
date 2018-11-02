@@ -40,23 +40,20 @@ tf.app.flags.DEFINE_bool("use_pipeline", False, "use tensorflow pipeline(tf.data
 
 
 def do_load_data(path):
-    x = []
-    y = []
-    fp = open(path, "r")
-    for line in fp.readlines():
-        line = line.rstrip()
-        if not line:
-            continue
-        ss = line.split(" ")
-        assert (len(ss) == (FLAGS.max_sentence_len * 2))
-        lx = []
-        ly = []
-        for i in range(FLAGS.max_sentence_len):
-            lx.append(int(ss[i]))
-            ly.append(int(ss[i + FLAGS.max_sentence_len]))
-        x.append(lx)
-        y.append(ly)
-    fp.close()
+    x, y = [], []
+    with open(path, "r") as fp:
+        for line in fp:
+            line = line.rstrip()
+            if not line:
+                continue
+            ss = line.split(" ")
+            assert (len(ss) == (FLAGS.max_sentence_len * 2))
+            lx, ly = [], []
+            for i in range(FLAGS.max_sentence_len):
+                lx.append(int(ss[i]))
+                ly.append(int(ss[i + FLAGS.max_sentence_len]))
+                x.append(lx)
+                y.append(ly)
     return np.array(x), np.array(y)
 
 
@@ -299,7 +296,7 @@ def main(unused_argv):
                                   FLAGS.log_dir + '/model',
                                   global_step=(step + 1))
                     raise e
-            sv.saver.save(sess, FLAGS.log_dir + '/finnal-model')
+            sv.saver.save(sess, FLAGS.log_dir + '/final-model')
 
 
 if __name__ == '__main__':

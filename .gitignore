@@ -1,3 +1,5 @@
+corpus/
+*~
 .idea
 .DS_*
 datas
