@@ -16,12 +16,11 @@ def processToken(token, collect, out, end):
   global longLine
   global maxLen
   nn = len(token)
-  #print token
   while nn > 0 and token[nn - 1] != '/':
     nn = nn - 1
 
   token = token[:nn - 1].strip()
-  ustr = unicode(token.decode('utf8'))
+  ustr = token.decode('utf8')
   for u in ustr:
     collect.append(u)
   uline = u''
@@ -34,12 +33,11 @@ def processToken(token, collect, out, end):
         uline = uline + u" " + s
       else:
         uline = s
-    out.write("%s\n" % (str(uline.encode('utf8'))))
+    out.write("%s\n" % (uline.encode('utf8')))
     del collect[:]
 
 
 def processLine(line, out):
-  line = line.strip()
   nn = len(line)
   seeLeftB = False
   start = 0
@@ -96,11 +94,9 @@ def main(argc, argv):
       if filename.endswith(".txt"):
         curFile = os.path.join(dirName, filename)
         # print("processing:%s" % (curFile))
-        fp = open(curFile, "r")
-        for line in fp.readlines():
-          line = line.strip()
-          processLine(line, out)
-        fp.close()
+        with open(curFile, "r") as fp:
+          for line in fp:
+            processLine(line.strip(), out)
   out.close()
   print("total:%d, long lines:%d" % (totalLine, longLine))
 
